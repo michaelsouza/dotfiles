@@ -9,7 +9,7 @@ This setup is designed to work without `sudo` on remote machines. Neovim itself 
 Main features:
 
 - Plugin management with `lazy.nvim`
-- Theme with `tokyonight`
+- Theme with `kanagawa`
 - File explorer with `neo-tree`
 - Fuzzy finder with `telescope.nvim`
 - Statusline with `lualine`
