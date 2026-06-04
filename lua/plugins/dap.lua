@@ -52,5 +52,29 @@ return {
         desc = "Debug terminate",
       },
     },
+    config = function()
+      local dap = require("dap")
+
+      dap.adapters.python = {
+        type = "executable",
+        command = vim.fn.stdpath("data") .. "/mason/bin/debugpy-adapter",
+      }
+
+      dap.configurations.python = {
+        {
+          type = "python",
+          request = "launch",
+          name = "Launch current file",
+          program = "${file}",
+          pythonPath = function()
+            local venv = os.getenv("VIRTUAL_ENV")
+            if venv then
+              return venv .. "/bin/python"
+            end
+            return vim.fn.exepath("python3") or "python3"
+          end,
+        },
+      }
+    end,
   },
 }
