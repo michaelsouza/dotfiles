@@ -25,6 +25,10 @@ return {
         capabilities = capabilities,
       })
 
+      vim.lsp.config("ruff", {
+        capabilities = capabilities,
+      })
+
       vim.lsp.config("clangd", {
         capabilities = capabilities,
       })
@@ -33,6 +37,7 @@ return {
         ensure_installed = {
           "lua_ls",
           "pyright",
+          "ruff",
           "clangd",
         },
         automatic_enable = true,
