@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+link_path() {
+  local source_path="$1"
+  local target_path="$2"
+
+  if [ ! -e "$source_path" ]; then
+    echo "missing source: $source_path" >&2
+    exit 1
+  fi
+
+  if [ -e "$target_path" ] && [ ! -L "$target_path" ]; then
+    echo "refusing to overwrite non-symlink: $target_path" >&2
+    exit 1
+  fi
+
+  ln -sfn "$source_path" "$target_path"
+  echo "$target_path -> $source_path"
+}
+
+mkdir -p "$HOME/.config"
+
+link_path "$repo_dir/nvim/.config/nvim" "$HOME/.config/nvim"
+link_path "$repo_dir/tmux/.config/tmux" "$HOME/.config/tmux"
+link_path "$HOME/.config/tmux/tmux.conf" "$HOME/.tmux.conf"
+
+if command -v tmux >/dev/null 2>&1; then
+  echo "tmux: $(tmux -V)"
+else
+  echo "tmux: missing"
+  echo "Install it with your system package manager, for example: sudo apt install tmux"
+fi
+
+if command -v nvim >/dev/null 2>&1; then
+  echo "nvim: $(nvim --version | sed -n '1p')"
+else
+  echo "nvim: missing"
+  echo "See nvim/README.md for local installation notes."
+fi
