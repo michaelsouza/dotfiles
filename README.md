@@ -13,6 +13,8 @@ inside each tool-specific module when changing behavior.
   project navigation and plugin management through `lazy.nvim`.
 - `tmux`: Terminal multiplexer configuration for local and remote development
   sessions.
+- `zsh`: Zsh shell configuration with Oh-My-Zsh, Powerlevel10k, and external
+  plugins (autosuggestions, syntax highlighting).
 
 ## Directory Layout
 
@@ -30,11 +32,15 @@ Expected layout:
 │           ├── init.lua
 │           ├── lazy-lock.json
 │           └── lua/
-└── tmux/
+├── tmux/
+│   ├── README.md
+│   └── .config/
+│       └── tmux/
+│           └── tmux.conf
+└── zsh/
     ├── README.md
-    └── .config/
-        └── tmux/
-            └── tmux.conf
+    ├── .zshrc
+    └── .zshenv
 ```
 
 The active configuration should point into this repository:
@@ -43,6 +49,8 @@ The active configuration should point into this repository:
 ~/.config/nvim -> ~/gitrepos/dotfiles/nvim/.config/nvim
 ~/.config/tmux -> ~/gitrepos/dotfiles/tmux/.config/tmux
 ~/.tmux.conf -> ~/.config/tmux/tmux.conf
+~/.zshrc -> ~/gitrepos/dotfiles/zsh/.zshrc
+~/.zshenv -> ~/gitrepos/dotfiles/zsh/.zshenv
 ```
 
 ## Bootstrap on a New Machine
@@ -88,6 +96,8 @@ Neovim can be installed system-wide or locally under `nvim/.tools/`; see
 - `nvim/README.md`: Neovim setup, Mason packages, Treesitter parsers,
   keybindings, terminal notes and health checks.
 - `tmux/README.md`: tmux installation, symlinks, prefix, keybindings and health
+  checks.
+- `zsh/README.md`: zsh installation, symlinks, plugins, aliases and health
   checks.
 
 ## Git Workflow

@@ -3,6 +3,20 @@ set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+check_dep() {
+  local cmd="$1"
+  local hint="$2"
+  local ver_flag="${3:---version}"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    echo "$cmd: $( "$cmd" "$ver_flag" 2>&1 | sed -n '1p' )"
+  else
+    echo "$cmd: missing"
+    if [[ -n "$hint" ]]; then
+      echo "  $hint"
+    fi
+  fi
+}
+
 link_path() {
   local source_path="$1"
   local target_path="$2"
@@ -27,16 +41,15 @@ link_path "$repo_dir/nvim/.config/nvim" "$HOME/.config/nvim"
 link_path "$repo_dir/tmux/.config/tmux" "$HOME/.config/tmux"
 link_path "$HOME/.config/tmux/tmux.conf" "$HOME/.tmux.conf"
 
-if command -v tmux >/dev/null 2>&1; then
-  echo "tmux: $(tmux -V)"
-else
-  echo "tmux: missing"
-  echo "Install it with your system package manager, for example: sudo apt install tmux"
+# -- Zsh linking
+if [[ -d "$repo_dir/zsh" ]]; then
+  link_path "$repo_dir/zsh/.zshrc" "$HOME/.zshrc"
+  link_path "$repo_dir/zsh/.zshenv" "$HOME/.zshenv"
 fi
 
-if command -v nvim >/dev/null 2>&1; then
-  echo "nvim: $(nvim --version | sed -n '1p')"
-else
-  echo "nvim: missing"
-  echo "See nvim/README.md for local installation notes."
-fi
+# -- Dependency checks
+check_dep tmux "Install it with your system package manager, for example: sudo apt install tmux" "-V"
+check_dep nvim "See nvim/README.md for local installation notes."
+check_dep zsh "sudo apt install zsh"
+check_dep git "sudo apt install git"
+check_dep curl "sudo apt install curl"
