@@ -1,0 +1,45 @@
+# ~/.p10k.zsh — Powerlevel10k prompt configuration
+# Managed by dotfiles repo; do not edit manually.
+# Regenerate with: p10k configure
+
+typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(dir vcs)
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status command_execution_time date_time)
+typeset -g POWERLEVEL9K_TRANSIENT_PROMPT=always
+
+# -- Icons
+typeset -g POWERLEVEL9K_ICON_PADDING=none
+
+# -- Prompt style
+typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
+typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX='\ue0b0 %{F#42a9f4}%n%f%F#75715e@%f%F#42a9f4%m%f\ue0b0 '
+typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_FIRST_PREFIX_OVERWRITE='\ue0b0 %#'
+
+# -- Dir
+typeset -g POWERLEVEL9K_DIR_SHOW_WRITABLE=varrow
+typeset -g POWERLEVEL9K_DIR_ANCHOR_ICON=$'\uE0A0'
+typeset -g POWERLEVEL9K_DIR_ANCHOR_BEFORE_FORMAT=' $P9K_CONTENT'
+typeset -g POWERLEVEL9K_DIR_SHORTENED_FOLDER_LENGTH=1
+typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
+
+# -- VCS
+typeset -g POWERLEVEL9K_VCS_CLEAN_ICON=$'\uF126'
+typeset -g POWERLEVEL9K_VCS_MODIFIED_ICON=$'\uF127'
+typeset -g POWERLEVEL9K_VCS_UNTRACKED_ICON=?
+typeset -g POWERLEVEL9K_VCS_CONFLICTED_ICON=$'\uF424'
+typeset -g POWERLEVEL9K_VCS_STAGED_ICON=$'\uF0FE'
+typeset -g POWERLEVEL9K_VCS_UNSTAGED_ICON=$'\uF1F9'
+typeset -g POWERLEVEL9K_VCS_LOADED_ICON=$'\uF2CB'
+
+# -- Status
+typeset -g POWERLEVEL9K_STATUS_OK=false
+typeset -g POWERLEVEL9K_STATUS_ERROR_PREORDER=true
+typeset -g POWERLEVEL9K_STATUS_VERBOSE_EXIT_CODE=true
+typeset -g POWERLEVEL9K_STATUS_EXTRA_PREFIX=' %4F✘%f'
+
+# -- Command execution time
+typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD=3
+typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FORMAT='d h m s'
+typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_ICON=$'\uE641'
+
+# -- Date / time
+typeset -g POWERLEVEL9K_DATE_TIME_FORMAT='%D{%H:%M:%S}'

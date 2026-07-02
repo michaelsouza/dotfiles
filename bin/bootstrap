@@ -45,6 +45,9 @@ link_path "$HOME/.config/tmux/tmux.conf" "$HOME/.tmux.conf"
 if [[ -d "$repo_dir/zsh" ]]; then
   link_path "$repo_dir/zsh/.zshrc" "$HOME/.zshrc"
   link_path "$repo_dir/zsh/.zshenv" "$HOME/.zshenv"
+  if [[ -f "$repo_dir/zsh/.p10k.zsh" ]]; then
+    link_path "$repo_dir/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
+  fi
 fi
 
 # -- Dependency checks
@@ -64,4 +67,20 @@ if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
   echo "Oh-My-Zsh installed."
 else
   echo "Oh-My-Zsh: already installed"
+fi
+
+# -- Powerlevel10k auto-install
+if [[ ! -d "$HOME/.p10k" ]]; then
+  echo "Cloning Powerlevel10k..."
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$HOME/.p10k" || { echo "Powerlevel10k clone failed." >&2; exit 1; }
+  P10K_OMZ_LINK="$HOME/.oh-my-zsh/custom/themes/powerlevel10k"
+  if [[ -L "$P10K_OMZ_LINK" ]]; then
+    rm -f "$P10K_OMZ_LINK"
+  elif [[ -d "$P10K_OMZ_LINK" ]]; then
+    rm -rf "$P10K_OMZ_LINK"
+  fi
+  ln -sfn "$HOME/.p10k" "$HOME/.oh-my-zsh/custom/themes/powerlevel10k"
+  echo "Powerlevel10k installed."
+else
+  echo "Powerlevel10k: already installed"
 fi
