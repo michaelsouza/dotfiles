@@ -53,3 +53,15 @@ check_dep nvim "See nvim/README.md for local installation notes."
 check_dep zsh "sudo apt install zsh"
 check_dep git "sudo apt install git"
 check_dep curl "sudo apt install curl"
+
+# -- Oh-My-Zsh auto-install
+if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+  OMZ_INSTALL="$(mktemp)"
+  trap "rm -f '$OMZ_INSTALL'" EXIT
+  curl -fsSL -o "$OMZ_INSTALL" https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh || { echo "Failed to download OMZ install script." >&2; exit 1; }
+  echo "Installing Oh-My-Zsh..."
+  zsh "$OMZ_INSTALL" --unattended || { echo "Oh-My-Zsh installation failed." >&2; exit 1; }
+  echo "Oh-My-Zsh installed."
+else
+  echo "Oh-My-Zsh: already installed"
+fi
