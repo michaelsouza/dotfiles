@@ -40,7 +40,8 @@ Expected layout:
 └── zsh/
     ├── README.md
     ├── .zshrc
-    └── .zshenv
+    ├── .zshenv
+    └── .p10k.zsh
 ```
 
 The active configuration should point into this repository:
@@ -51,6 +52,7 @@ The active configuration should point into this repository:
 ~/.tmux.conf -> ~/.config/tmux/tmux.conf
 ~/.zshrc -> ~/gitrepos/dotfiles/zsh/.zshrc
 ~/.zshenv -> ~/gitrepos/dotfiles/zsh/.zshenv
+~/.p10k.zsh -> ~/gitrepos/dotfiles/zsh/.p10k.zsh
 ```
 
 ## Bootstrap on a New Machine

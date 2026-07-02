@@ -9,7 +9,26 @@ export TERM="${TERM:-xterm-256color}"
 setopt AUTO_CD          # cd into a directory just by typing its name
 setopt AUTO_PUSHD       # change dirs, push old onto stack
 setopt PUSHD_IGNORE_DUP # don't push duplicate dirs onto stack
-setopt INC_APPEND_HISTORY # append history as you go, not on shell exit
+setopt EXTENDED_GLOB    # extended globbing
+
+# -- History
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=10000
+SAVEHIST=10000
+setopt EXTENDED_HISTORY     # save timestamps
+setopt HIST_IGNORE_ALL_DUPS # remove all duplicates when new entry added
+setopt HIST_FIND_NO_DUPS    # don't show duplicates when searching
+setopt INC_APPEND_HISTORY   # append history as you go, not on shell exit
+setopt SHARE_HISTORY        # share history between sessions
+
+# -- Keybindings
+bindkey -e                                   # emacs keybindings
+bindkey '\e[A' up-line-or-search             # up arrow: search history or navigate
+bindkey '\e[B' down-line-or-search           # down arrow: search history or navigate
+bindkey '^e' edit-command-line               # Ctrl+e: edit line in $EDITOR
+bindkey '^x^e' edit-command-line             # Ctrl+x Ctrl+e: edit line in $EDITOR
+bindkey '^r' history-incremental-search-backward # Ctrl+r: reverse history search
+bindkey '^s' history-incremental-search-forward  # Ctrl+s: forward history search
 
 # -- Prompt (basic, overwritten by p10k later)
 PROMPT='%n@%m %~ %# '
