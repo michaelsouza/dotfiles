@@ -91,7 +91,8 @@ bin/system-monitor --disk /home --interval 1
 
 For scripts, logs or a single snapshot, use
 `bin/system-monitor --once --no-color`. Network rates combine all non-loopback
-interfaces. GPU process usage is shown when the NVIDIA driver exposes it via
+interfaces and include separate recent-history graphs for download and upload.
+GPU process usage is shown when the NVIDIA driver exposes it via
 `nvidia-smi`; AMD GPU utilization is detected through Linux `sysfs` when
 available. Hardware names are read from Linux and `lspci` when installed.
 

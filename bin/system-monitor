@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import glob
 import os
 import shutil
@@ -221,6 +222,15 @@ def bar(percent: float, width: int) -> str:
     return f"{color_for(percent)}{'━' * filled}{DIM}{'─' * (width - filled)}{RESET}"
 
 
+def sparkline(values: list[float], width: int = 18) -> str:
+    blocks = "▁▂▃▄▅▆▇█"
+    samples = ([0.0] * width + values)[-width:]
+    peak = max(samples, default=0)
+    if peak <= 0:
+        return blocks[0] * width
+    return "".join(blocks[round(value / peak * (len(blocks) - 1))] for value in samples)
+
+
 def process_table(title: str, rows: list[Process], unit: str, width: int) -> list[str]:
     lines = [f"{BOLD}{PURPLE}{title:<10}{RESET} {DIM}{'PID':>7}  {'PROCESSO':<18} {'USO':>7}{RESET}"]
     if not rows:
@@ -232,7 +242,7 @@ def process_table(title: str, rows: list[Process], unit: str, width: int) -> lis
     return lines
 
 
-def render(metrics: list[Metric], network: Network, hardware: tuple[str, str], cpu: list[Process], ram: list[Process], gpu: list[Process], color: bool) -> str:
+def render(metrics: list[Metric], network: Network, network_history: tuple[list[float], list[float]], hardware: tuple[str, str], cpu: list[Process], ram: list[Process], gpu: list[Process], color: bool) -> str:
     global RESET, BOLD, DIM, CYAN, GREEN, YELLOW, RED, PURPLE, WHITE
     if not color:
         RESET = BOLD = DIM = CYAN = GREEN = YELLOW = RED = PURPLE = WHITE = ""
@@ -256,12 +266,16 @@ def render(metrics: list[Metric], network: Network, hardware: tuple[str, str], c
             f"{BOLD}{metric.label:<7}{RESET} {bar(metric.percent, bar_width)} "
             f"{color_for(metric.percent)}{metric.percent:>5.1f}%{RESET}  {DIM}{metric.detail}{RESET}"
         )
-    activity = min(100, max(network.received, network.sent) / (10 * 1024 * 1024) * 100)
-    lines.append(
-        f"{BOLD}{'REDE':<7}{RESET} {bar(activity, bar_width)} "
-        f"{GREEN}↓ {human_bytes(network.received)}/s{RESET}  "
-        f"{CYAN}↑ {human_bytes(network.sent)}/s{RESET}  {DIM}{network.interfaces}{RESET}"
-    )
+    download = f"{human_bytes(network.received)}/s"
+    upload = f"{human_bytes(network.sent)}/s"
+    interfaces = network.interfaces[:18]
+    graph_width = max(12, min(24, bar_width - 10))
+    lines.extend([
+        f"{BOLD}{'REDE':<7}{RESET} {GREEN}↓ {download:>12}  "
+        f"{sparkline(network_history[0], graph_width)}{RESET}  {DIM}{interfaces:<18}{RESET}",
+        f"{'':7} {CYAN}↑ {upload:>12}  "
+        f"{sparkline(network_history[1], graph_width)}{RESET}  {DIM}histórico recente{RESET}",
+    ])
     lines.extend(["", f"{DIM}{'─' * width}{RESET}", f"{BOLD}{WHITE}TOP 3 PROCESSOS{RESET}", ""])
     lines.extend(process_table("CPU", cpu, "%", width))
     lines.append("")
@@ -294,6 +308,8 @@ def main() -> int:
     previous = read_cpu()
     previous_network = read_network()
     previous_time = time.monotonic()
+    received_history: deque[float] = deque(maxlen=24)
+    sent_history: deque[float] = deque(maxlen=24)
     hardware = (cpu_model(), gpu_models())
     time.sleep(min(args.interval, 0.25))
     try:
@@ -306,6 +322,8 @@ def main() -> int:
             network = network_usage(previous_network, current_network, now - previous_time)
             previous_network = current_network
             previous_time = now
+            received_history.append(network.received)
+            sent_history.append(network.sent)
             gpu_metric, gpu_processes = nvidia_gpu()
             gpu_metric = gpu_metric or sysfs_gpu()
             metrics = [
@@ -315,7 +333,8 @@ def main() -> int:
                 disk_metric(args.disk),
             ]
             screen = render(
-                metrics, network, hardware, top_processes("%cpu"), top_processes("%mem"),
+                metrics, network, (list(received_history), list(sent_history)), hardware,
+                top_processes("%cpu"), top_processes("%mem"),
                 gpu_processes, color,
             )
             if interactive:
