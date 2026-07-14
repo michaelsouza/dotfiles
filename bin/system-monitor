@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""Live, dependency-free system resource dashboard for Linux terminals."""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+CYAN = "\033[38;5;51m"
+GREEN = "\033[38;5;82m"
+YELLOW = "\033[38;5;220m"
+RED = "\033[38;5;203m"
+PURPLE = "\033[38;5;141m"
+WHITE = "\033[38;5;255m"
+
+
+@dataclass
+class Metric:
+    label: str
+    percent: float
+    detail: str
+
+
+@dataclass
+class Process:
+    pid: str
+    name: str
+    value: float
+
+
+@dataclass
+class Network:
+    received: float
+    sent: float
+    interfaces: str
+
+
+def run(command: list[str]) -> str:
+    try:
+        return subprocess.run(
+            command, check=False, capture_output=True, text=True, timeout=2
+        ).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def human_bytes(value: float) -> str:
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return "0 B"
+
+
+def cpu_model() -> str:
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as source:
+            for line in source:
+                if line.lower().startswith(("model name", "hardware")):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return os.uname().machine
+
+
+def gpu_models() -> str:
+    output = run([
+        "nvidia-smi", "--query-gpu=name", "--format=csv,noheader",
+    ]) if shutil.which("nvidia-smi") else ""
+    names = list(dict.fromkeys(line.strip() for line in output.splitlines() if line.strip()))
+    if not names and shutil.which("lspci"):
+        for line in run(["lspci"]).splitlines():
+            description = line.split(": ", 1)
+            kind = description[0].lower()
+            if "vga compatible controller" in kind or "3d controller" in kind or "display controller" in kind:
+                names.append(description[-1].strip())
+    return " · ".join(dict.fromkeys(names)) or "não identificada"
+
+
+def read_network() -> tuple[int, int, list[str]]:
+    received = sent = 0
+    interfaces = []
+    try:
+        with open("/proc/net/dev", encoding="utf-8") as source:
+            for line in list(source)[2:]:
+                name, values = line.split(":", 1)
+                name = name.strip()
+                if name == "lo":
+                    continue
+                fields = values.split()
+                received += int(fields[0])
+                sent += int(fields[8])
+                interfaces.append(name)
+    except (OSError, ValueError, IndexError):
+        pass
+    return received, sent, interfaces
+
+
+def network_usage(previous: tuple[int, int, list[str]], current: tuple[int, int, list[str]], elapsed: float) -> Network:
+    elapsed = max(elapsed, 0.001)
+    received = max(0, current[0] - previous[0]) / elapsed
+    sent = max(0, current[1] - previous[1]) / elapsed
+    return Network(received, sent, ", ".join(current[2]) or "sem interface")
+
+
+def read_cpu() -> tuple[int, int]:
+    with open("/proc/stat", encoding="utf-8") as source:
+        values = [int(value) for value in source.readline().split()[1:]]
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    return idle, sum(values)
+
+
+def cpu_percent(previous: tuple[int, int], current: tuple[int, int]) -> float:
+    idle_delta = current[0] - previous[0]
+    total_delta = current[1] - previous[1]
+    return 0.0 if total_delta <= 0 else 100 * (1 - idle_delta / total_delta)
+
+
+def memory_metric() -> Metric:
+    fields: dict[str, int] = {}
+    with open("/proc/meminfo", encoding="utf-8") as source:
+        for line in source:
+            key, value, *_ = line.replace(":", "").split()
+            fields[key] = int(value) * 1024
+    total = fields["MemTotal"]
+    used = total - fields.get("MemAvailable", fields.get("MemFree", 0))
+    return Metric("RAM", used / total * 100, f"{human_bytes(used)} / {human_bytes(total)}")
+
+
+def disk_metric(path: str) -> Metric:
+    usage = shutil.disk_usage(path)
+    return Metric(
+        "DISCO", usage.used / usage.total * 100,
+        f"{human_bytes(usage.used)} / {human_bytes(usage.total)}  ({path})",
+    )
+
+
+def nvidia_gpu() -> tuple[Metric | None, list[Process]]:
+    if not shutil.which("nvidia-smi"):
+        return None, []
+    output = run([
+        "nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,name",
+        "--format=csv,noheader,nounits",
+    ])
+    if not output:
+        return None, []
+    gpus = []
+    for line in output.splitlines():
+        try:
+            util, used, total, name = [part.strip() for part in line.split(",", 3)]
+            gpus.append((float(util), float(used), float(total), name))
+        except (ValueError, IndexError):
+            continue
+    if not gpus:
+        return None, []
+    percent = sum(gpu[0] for gpu in gpus) / len(gpus)
+    used = sum(gpu[1] for gpu in gpus)
+    total = sum(gpu[2] for gpu in gpus)
+    name = gpus[0][3] if len(gpus) == 1 else f"{len(gpus)} GPUs NVIDIA"
+    metric = Metric("GPU", percent, f"{name} · VRAM {used:.0f} / {total:.0f} MiB")
+
+    processes: list[Process] = []
+    pmon = run(["nvidia-smi", "pmon", "-c", "1", "-s", "u"])
+    for line in pmon.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split()
+        try:
+            pid, sm, name = parts[1], parts[3], parts[-1]
+            if pid != "-" and sm != "-":
+                processes.append(Process(pid, name, float(sm)))
+        except (ValueError, IndexError):
+            continue
+    return metric, sorted(processes, key=lambda item: item.value, reverse=True)[:3]
+
+
+def sysfs_gpu() -> Metric | None:
+    for path in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+        try:
+            with open(path, encoding="utf-8") as source:
+                percent = float(source.read().strip())
+            driver_link = os.path.join(os.path.dirname(path), "driver")
+            driver = os.path.basename(os.path.realpath(driver_link))
+            return Metric("GPU", percent, f"driver {driver or 'Linux'} · processos indisponíveis")
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def top_processes(sort_key: str) -> list[Process]:
+    output = run(["ps", "-eo", f"pid=,comm=,{sort_key}=", f"--sort=-{sort_key}"])
+    result = []
+    for line in output.splitlines()[:3]:
+        parts = line.split(None, 2)
+        if len(parts) == 3:
+            try:
+                result.append(Process(parts[0], parts[1], float(parts[2])))
+            except ValueError:
+                pass
+    return result
+
+
+def color_for(percent: float) -> str:
+    return GREEN if percent < 60 else YELLOW if percent < 85 else RED
+
+
+def bar(percent: float, width: int) -> str:
+    width = max(8, width)
+    filled = round(width * min(100, max(0, percent)) / 100)
+    return f"{color_for(percent)}{'━' * filled}{DIM}{'─' * (width - filled)}{RESET}"
+
+
+def process_table(title: str, rows: list[Process], unit: str, width: int) -> list[str]:
+    lines = [f"{BOLD}{PURPLE}{title:<10}{RESET} {DIM}{'PID':>7}  {'PROCESSO':<18} {'USO':>7}{RESET}"]
+    if not rows:
+        lines.append(f"{DIM}{'sem dados do driver':>{min(width, 41)}}{RESET}")
+    for row in rows:
+        name_width = max(8, min(24, width - 27))
+        name = row.name[:name_width]
+        lines.append(f"{'':10} {row.pid:>7}  {name:<{name_width}} {row.value:>6.1f}{unit}")
+    return lines
+
+
+def render(metrics: list[Metric], network: Network, hardware: tuple[str, str], cpu: list[Process], ram: list[Process], gpu: list[Process], color: bool) -> str:
+    global RESET, BOLD, DIM, CYAN, GREEN, YELLOW, RED, PURPLE, WHITE
+    if not color:
+        RESET = BOLD = DIM = CYAN = GREEN = YELLOW = RED = PURPLE = WHITE = ""
+    width = max(52, min(shutil.get_terminal_size((88, 24)).columns, 110))
+    bar_width = max(12, width - 36)
+    hostname = os.uname().nodename
+    heading = f"SYSTEM PULSE · {hostname} · {time.strftime('%d/%m/%Y %H:%M:%S')}"
+    lines = [
+        f"{BOLD}{CYAN}╭{'─' * (width - 2)}╮{RESET}",
+        f"{BOLD}{CYAN}│{RESET}  {WHITE}{heading}{RESET}"
+        f"{' ' * max(1, width - len(heading) - 3)}{BOLD}{CYAN}│{RESET}",
+        f"{BOLD}{CYAN}╰{'─' * (width - 2)}╯{RESET}",
+        "",
+        f"{BOLD}{PURPLE}HARDWARE{RESET}",
+        f"{DIM}CPU{RESET}  {hardware[0]}",
+        f"{DIM}GPU{RESET}  {hardware[1]}",
+        "",
+    ]
+    for metric in metrics:
+        lines.append(
+            f"{BOLD}{metric.label:<7}{RESET} {bar(metric.percent, bar_width)} "
+            f"{color_for(metric.percent)}{metric.percent:>5.1f}%{RESET}  {DIM}{metric.detail}{RESET}"
+        )
+    activity = min(100, max(network.received, network.sent) / (10 * 1024 * 1024) * 100)
+    lines.append(
+        f"{BOLD}{'REDE':<7}{RESET} {bar(activity, bar_width)} "
+        f"{GREEN}↓ {human_bytes(network.received)}/s{RESET}  "
+        f"{CYAN}↑ {human_bytes(network.sent)}/s{RESET}  {DIM}{network.interfaces}{RESET}"
+    )
+    lines.extend(["", f"{DIM}{'─' * width}{RESET}", f"{BOLD}{WHITE}TOP 3 PROCESSOS{RESET}", ""])
+    lines.extend(process_table("CPU", cpu, "%", width))
+    lines.append("")
+    lines.extend(process_table("RAM", ram, "%", width))
+    lines.append("")
+    lines.extend(process_table("GPU", gpu, "%", width))
+    lines.append(f"\n{DIM}Atualiza automaticamente · Ctrl+C para sair{RESET}")
+    return "\n".join(lines)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Dashboard gráfico de recursos do Linux")
+    parser.add_argument("--interval", type=float, default=2.0, help="segundos entre atualizações (padrão: 2)")
+    parser.add_argument("--disk", default="/", help="partição/diretório monitorado (padrão: /)")
+    parser.add_argument("--once", action="store_true", help="exibe uma medição e encerra")
+    parser.add_argument("--no-color", action="store_true", help="desativa cores ANSI")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.interval <= 0:
+        print("system-monitor: --interval deve ser maior que zero", file=sys.stderr)
+        return 2
+    if not os.path.exists(args.disk):
+        print(f"system-monitor: caminho não encontrado: {args.disk}", file=sys.stderr)
+        return 2
+    interactive = sys.stdout.isatty() and not args.once
+    color = sys.stdout.isatty() and not args.no_color
+    previous = read_cpu()
+    previous_network = read_network()
+    previous_time = time.monotonic()
+    hardware = (cpu_model(), gpu_models())
+    time.sleep(min(args.interval, 0.25))
+    try:
+        while True:
+            current = read_cpu()
+            cpu_value = cpu_percent(previous, current)
+            previous = current
+            now = time.monotonic()
+            current_network = read_network()
+            network = network_usage(previous_network, current_network, now - previous_time)
+            previous_network = current_network
+            previous_time = now
+            gpu_metric, gpu_processes = nvidia_gpu()
+            gpu_metric = gpu_metric or sysfs_gpu()
+            metrics = [
+                Metric("CPU", cpu_value, f"{os.cpu_count() or '?'} núcleos lógicos"),
+                memory_metric(),
+                gpu_metric or Metric("GPU", 0, "telemetria não disponível"),
+                disk_metric(args.disk),
+            ]
+            screen = render(
+                metrics, network, hardware, top_processes("%cpu"), top_processes("%mem"),
+                gpu_processes, color,
+            )
+            if interactive:
+                print("\033[2J\033[H", end="")
+            print(screen, flush=True)
+            if args.once:
+                break
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        if interactive:
+            print(RESET)
+    return 0
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    raise SystemExit(main())

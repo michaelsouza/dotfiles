@@ -15,6 +15,9 @@ inside each tool-specific module when changing behavior.
   sessions.
 - `zsh`: Zsh shell configuration with Oh-My-Zsh, Powerlevel10k, and external
   plugins (autosuggestions, syntax highlighting).
+- `bin/system-monitor`: live terminal dashboard for CPU, RAM, GPU, disk,
+  network traffic, hardware models and the top resource-consuming processes.
+  It uses only the Python standard library and Linux system interfaces.
 
 ## Directory Layout
 
@@ -71,6 +74,26 @@ Create or refresh configuration links:
 ```bash
 bin/bootstrap
 ```
+
+## System Monitor
+
+Run the live resource dashboard directly from the repository:
+
+```bash
+bin/system-monitor
+```
+
+Use `Ctrl+C` to close it. A different disk and refresh interval can be chosen:
+
+```bash
+bin/system-monitor --disk /home --interval 1
+```
+
+For scripts, logs or a single snapshot, use
+`bin/system-monitor --once --no-color`. Network rates combine all non-loopback
+interfaces. GPU process usage is shown when the NVIDIA driver exposes it via
+`nvidia-smi`; AMD GPU utilization is detected through Linux `sysfs` when
+available. Hardware names are read from Linux and `lspci` when installed.
 
 The bootstrap script refuses to overwrite real files or directories at the
 target paths. Move existing configs aside before running it if needed.
